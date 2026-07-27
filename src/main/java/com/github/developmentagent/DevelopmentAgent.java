@@ -1,20 +1,23 @@
 package com.github.developmentagent;
 
 import com.github.copilot.CopilotClient;
-import com.github.copilot.generated.AssistantMessageEvent;
-import com.github.copilot.rpc.MessageOptions;
-import com.github.copilot.rpc.PermissionHandler;
-import com.github.copilot.rpc.SessionConfig;
+import com.github.developmentagent.domain.ExecutionPlan;
+import com.github.developmentagent.workflow.DeliveryWorkflow;
 
 /**
  * DevelopmentAgent is the main entry point for the GitHub Copilot SDK powered
- * development agent. It orchestrates a workflow that:
+ * development agent.
+ *
+ * <p>It implements the <em>agents-as-tools</em> orchestration pattern described in
+ * {@code docs/architecture/agents-as-tools-first-pass.md}:
  *
  * <ol>
- *   <li>Connects to a ticket source (e.g. Jira) to retrieve open tasks.</li>
- *   <li>For each ticket, creates a Copilot session and runs multiple
- *       specialised agents (planner, coder, reviewer) in sequence until the
- *       task is considered done.</li>
+ *   <li>The {@link DeliveryWorkflow} acts as the Delivery Agent — the top-level orchestrator.</li>
+ *   <li>The Delivery Agent registers specialist agents (Jira, Planning) as tools on its session.</li>
+ *   <li>The model drives the workflow by calling tools in sequence; each tool runs its own
+ *       dedicated sub-session.</li>
+ *   <li>Structured data ({@link com.github.developmentagent.domain.TicketBrief},
+ *       {@link ExecutionPlan}) flows between agents as typed, JSON-serialised values.</li>
  * </ol>
  *
  * <p><b>SDK references:</b>
@@ -34,29 +37,25 @@ public class DevelopmentAgent {
     public static void main(String[] args) throws Exception {
         System.out.println("=== Development Agent starting ===");
 
-        // --- Quickstart: create a Copilot session and send a prompt -----------
-        // See: https://docs.github.com/en/copilot/how-tos/copilot-sdk/getting-started
+        // Ticket key to process — use the first CLI argument or fall back to the sample.
+        String ticketKey = args.length > 0 ? args[0] : "DEV-1";
+        System.out.println("Processing ticket: " + ticketKey);
+
         try (var client = new CopilotClient()) {
             client.start().get();
 
-            var session = client.createSession(
-                    new SessionConfig()
-                            .setModel("auto")
-                            .setOnPermissionRequest(PermissionHandler.APPROVE_ALL)
-            ).get();
+            var workflow = new DeliveryWorkflow(client);
+            ExecutionPlan plan = workflow.processTicket(ticketKey);
 
-            // Register a listener to print streamed assistant responses.
-            session.on(AssistantMessageEvent.class, event ->
-                    System.out.println("[Copilot] " + event.getData().content()));
-
-            // Example: ask Copilot to outline a development plan for a ticket.
-            var sampleTicket = new Ticket("DEV-1", "Implement login feature",
-                    "Users need to be able to log in with username and password.");
-
-            System.out.println("Processing ticket: " + sampleTicket.id() + " – " + sampleTicket.title());
-
-            AgentWorkflow workflow = new AgentWorkflow(session);
-            workflow.run(sampleTicket);
+            if (plan != null) {
+                System.out.println("\n=== Execution Plan Summary ===");
+                System.out.println("Ticket  : " + plan.ticketId());
+                System.out.println("Steps   : " + plan.steps().size());
+                System.out.println("Risks   : " + plan.risks().size());
+                System.out.println("Done criteria: " + plan.doneCriteria());
+            } else {
+                System.out.println("[DevelopmentAgent] No plan produced — check agent logs above.");
+            }
 
             client.stop().get();
         }
