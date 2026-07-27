@@ -1,6 +1,7 @@
 package com.github.developmentagent.agents.jira;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.copilot.AllowCopilotExperimental;
 import com.github.copilot.CopilotClient;
 import com.github.copilot.generated.AssistantMessageEvent;
 import com.github.copilot.rpc.MessageOptions;
@@ -8,11 +9,14 @@ import com.github.copilot.rpc.PermissionHandler;
 import com.github.copilot.rpc.SessionConfig;
 import com.github.copilot.tool.CopilotTool;
 import com.github.copilot.tool.CopilotToolParam;
-import com.github.developmentagent.domain.TicketBrief;
+import com.github.developmentagent.agents.workflow.TicketBrief;
+import com.github.developmentagent.agents.workflow.TicketTool;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.springframework.stereotype.Component;
 
 /**
  * Jira Agent tool invoked by the Delivery Agent to fetch and normalise ticket data.
@@ -24,7 +28,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>Each invocation opens a dedicated Copilot sub-session, directs it to act as a Jira
  * integration specialist, and closes the session once the brief is produced.
  */
-public class JiraAgentTool {
+@Component
+class JiraAgentTool implements TicketTool {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -68,10 +73,12 @@ public class JiraAgentTool {
      * @param ticketKey the Jira ticket key, e.g. {@code "DEV-1"}.
      * @return JSON string representing a {@link TicketBrief}.
      */
+    @Override
+    @AllowCopilotExperimental
     @CopilotTool("Fetches a Jira ticket by key and returns a structured ticket brief as JSON. "
             + "The brief contains: id, title, goal, description, acceptanceCriteria (array), "
             + "and linkedIssues (array).")
-    public String fetchTicketBrief(
+    public TicketBrief fetchTicketBrief(
             @CopilotToolParam("The Jira ticket key to fetch, e.g. DEV-123") String ticketKey) {
 
         System.out.println("[JiraAgent] Fetching ticket brief for: " + ticketKey);
@@ -119,9 +126,9 @@ public class JiraAgentTool {
             if (content != null && !content.isBlank()) {
                 String json = extractJson(content);
                 // Validate parseable before returning
-                MAPPER.readValue(json, TicketBrief.class);
-                System.out.println("[JiraAgent] Ticket brief produced for: " + ticketKey);
-                return json;
+                return MAPPER.readValue(json, TicketBrief.class);
+                // System.out.println("[JiraAgent] Ticket brief produced for: " + ticketKey);
+                // return json;
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -131,7 +138,7 @@ public class JiraAgentTool {
         }
 
         // Fallback to a minimal structural response so the workflow can continue
-        return buildFallbackBrief(ticketKey);
+        return null;
     }
 
     /**

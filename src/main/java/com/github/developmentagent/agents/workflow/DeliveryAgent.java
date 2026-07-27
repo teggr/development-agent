@@ -1,4 +1,4 @@
-package com.github.developmentagent.workflow;
+package com.github.developmentagent.agents.workflow;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.copilot.CopilotClient;
@@ -7,12 +7,10 @@ import com.github.copilot.rpc.MessageOptions;
 import com.github.copilot.rpc.PermissionHandler;
 import com.github.copilot.rpc.SessionConfig;
 import com.github.copilot.rpc.ToolDefinition;
-import com.github.developmentagent.agents.jira.JiraAgentTool;
-import com.github.developmentagent.agents.planning.PlanningAgentTool;
-import com.github.developmentagent.domain.ExecutionPlan;
 
 import java.util.ArrayList;
-import java.util.concurrent.atomic.AtomicReference;
+
+import org.springframework.stereotype.Component;
 
 /**
  * Delivery Agent — the top-level orchestrator for a single ticket.
@@ -30,19 +28,19 @@ import java.util.concurrent.atomic.AtomicReference;
  * tools on its own Copilot session, then prompts the model to drive the orchestration.
  * The model calls the tools in sequence; each tool opens its own dedicated sub-session.
  */
-public class DeliveryWorkflow {
+@Component
+public class DeliveryAgent {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final CopilotClient client;
+    private final TicketTool ticketTool;
+    private final PlanningTool planningTool;
 
-    /**
-     * Creates a delivery workflow that uses the supplied client to create sessions.
-     *
-     * @param client an already-started {@link CopilotClient}.
-     */
-    public DeliveryWorkflow(CopilotClient client) {
+    public DeliveryAgent( CopilotClient client, TicketTool ticketTool, PlanningTool planningTool ) {
         this.client = client;
+        this.ticketTool = ticketTool;
+        this.planningTool = planningTool;
     }
 
     /**
@@ -63,17 +61,14 @@ public class DeliveryWorkflow {
     public ExecutionPlan processTicket(String ticketKey) throws Exception {
         System.out.println("[DeliveryAgent] Starting workflow for ticket: " + ticketKey);
 
-        // Capture the plan JSON produced by the Planning Agent tool
-        var planJsonHolder = new AtomicReference<String>();
-
+        
         // Instantiate specialist agents. The Delivery Agent determines their contracts.
-        var jiraAgentTool = new JiraAgentTool(client);
-        var planningAgentTool = new PlanningAgentTool(client, planJsonHolder::set);
+
 
         // Register specialist agents as tools on the Delivery Agent session
         var tools = new ArrayList<ToolDefinition>();
-        tools.addAll(ToolDefinition.fromObject(jiraAgentTool));
-        tools.addAll(ToolDefinition.fromObject(planningAgentTool));
+        tools.addAll(ToolDefinition.fromObject(ticketTool));
+        tools.addAll(ToolDefinition.fromObject(planningTool));
 
         var session = client.createSession(new SessionConfig()
                 .setModel("auto")
@@ -111,10 +106,10 @@ public class DeliveryWorkflow {
 
         System.out.println("[DeliveryAgent] Workflow complete for ticket: " + ticketKey);
 
-        String planJson = planJsonHolder.get();
-        if (planJson != null) {
-            return MAPPER.readValue(planJson, ExecutionPlan.class);
-        }
+        // String planJson = planJsonHolder.get();
+        // if (planJson != null) {
+        //     return MAPPER.readValue(planJson, ExecutionPlan.class);
+        // }
         return null;
     }
 }

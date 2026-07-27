@@ -17,6 +17,10 @@ The agent follows a three-phase workflow for each ticket:
 - **GitHub Copilot CLI** installed, authenticated, and available in `PATH`
   - See [Getting started with the Copilot SDK](https://docs.github.com/en/copilot/how-tos/copilot-sdk/getting-started)
 
+## Framework
+
+- **Spring Boot 4** (CLI-style application, no web starter dependencies)
+
 ## Building
 
 ```bash
@@ -32,7 +36,7 @@ java --enable-preview -jar target/development-agent-1.0.0-SNAPSHOT.jar
 Or directly via Maven during development:
 
 ```bash
-mvn compile exec:java -Dexec.mainClass=com.github.developmentagent.DevelopmentAgent
+mvn spring-boot:run -Dspring-boot.run.arguments=MY-123
 ```
 
 ## SDK References

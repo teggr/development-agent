@@ -1,6 +1,7 @@
 package com.github.developmentagent.agents.planning;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.copilot.AllowCopilotExperimental;
 import com.github.copilot.CopilotClient;
 import com.github.copilot.generated.AssistantMessageEvent;
 import com.github.copilot.rpc.MessageOptions;
@@ -8,8 +9,9 @@ import com.github.copilot.rpc.PermissionHandler;
 import com.github.copilot.rpc.SessionConfig;
 import com.github.copilot.tool.CopilotTool;
 import com.github.copilot.tool.CopilotToolParam;
-import com.github.developmentagent.domain.ExecutionPlan;
-import com.github.developmentagent.domain.TicketBrief;
+import com.github.developmentagent.agents.workflow.ExecutionPlan;
+import com.github.developmentagent.agents.workflow.PlanningTool;
+import com.github.developmentagent.agents.workflow.TicketBrief;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -19,6 +21,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+
+import org.springframework.stereotype.Component;
 
 /**
  * Planning Agent tool invoked by the Delivery Agent to produce an implementation plan.
@@ -31,7 +35,8 @@ import java.util.function.Consumer;
  * architect, and closes the session once the plan is produced. The plan is also persisted
  * to disk so it can be consumed by subsequent agents.
  */
-public class PlanningAgentTool {
+@Component
+class PlanningAgentTool implements PlanningTool {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final DateTimeFormatter TIMESTAMP_FMT =
@@ -43,7 +48,7 @@ public class PlanningAgentTool {
      * Called after each successful plan is produced.  The Delivery Agent uses this to
      * capture the plan without polling or side-channels.
      */
-    private final Consumer<String> onPlanProduced;
+ //   private final Consumer<String> onPlanProduced;
 
     /**
      * Creates a Planning Agent tool that opens sub-sessions via the supplied client.
@@ -51,9 +56,12 @@ public class PlanningAgentTool {
      * @param client         an already-started {@link CopilotClient}.
      * @param onPlanProduced callback invoked with the raw plan JSON once the plan is ready.
      */
-    public PlanningAgentTool(CopilotClient client, Consumer<String> onPlanProduced) {
+    public PlanningAgentTool(CopilotClient client) {
+        // Capture the plan JSON produced by the Planning Agent tool
+        var planJsonHolder = new AtomicReference<String>();
+
         this.client = client;
-        this.onPlanProduced = onPlanProduced;
+        //this.onPlanProduced = onPlanProduced;
     }
 
     /**
@@ -66,11 +74,12 @@ public class PlanningAgentTool {
      * @param ticketBriefJson JSON string representing the {@link TicketBrief} from the Jira Agent.
      * @return JSON string representing an {@link ExecutionPlan}.
      */
+    @Override
+    @AllowCopilotExperimental
     @CopilotTool("Creates a detailed implementation plan from a ticket brief JSON produced by the "
             + "Jira Agent. Returns an execution plan as JSON with: ticketId, steps (ordered list), "
             + "likelyPackages, likelyFiles, requiredTests, risks, and doneCriteria.")
-    public String createExecutionPlan(
-            @CopilotToolParam("JSON string of the ticket brief from the Jira Agent") String ticketBriefJson) {
+    public ExecutionPlan createExecutionPlan(  TicketBrief ticketBriefJson) {
 
         System.out.println("[PlanningAgent] Creating execution plan...");
 
@@ -132,8 +141,8 @@ public class PlanningAgentTool {
                 ExecutionPlan plan = MAPPER.readValue(json, ExecutionPlan.class);
                 System.out.println("[PlanningAgent] Execution plan produced for ticket: " + plan.ticketId());
                 persistPlan(plan.ticketId(), json);
-                onPlanProduced.accept(json);
-                return json;
+               // onPlanProduced.accept(json);
+                return plan;
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -143,9 +152,9 @@ public class PlanningAgentTool {
         }
 
         // Fallback to a minimal structural response so the workflow can continue
-        String fallback = buildFallbackPlan(ticketBriefJson);
-        onPlanProduced.accept(fallback);
-        return fallback;
+        // String fallback = buildFallbackPlan(ticketBriefJson);
+        // onPlanProduced.accept(fallback);
+        return null;
     }
 
     /**

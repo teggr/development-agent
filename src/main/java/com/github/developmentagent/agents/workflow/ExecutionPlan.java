@@ -1,4 +1,4 @@
-package com.github.developmentagent.domain;
+package com.github.developmentagent.agents.workflow;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
