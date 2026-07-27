@@ -59,3 +59,7 @@ src/main/java/com/github/developmentagent/
 - **Implement `TicketSource`** to connect to your ticket system (Jira, GitHub Issues, Linear, etc.).
 - **Add tools** using `@CopilotTool` annotations to give agents access to your codebase, CI/CD pipelines, or external APIs.
 - **Add more agent phases** by extending `AgentWorkflow` (e.g. a documentation-writing agent).
+
+## Architecture
+
+- First-pass Agents-as-Tools orchestration design: `docs/architecture/agents-as-tools-first-pass.md`
